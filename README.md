@@ -57,7 +57,7 @@ secret = "tralala"
 target = "deploy"
 
 [github."Xowap/TestRepo".branches.master.env]
-DEPLOY_DIR = "/tmp/yolo"
+DEPLOY_DIR = "/var/www"
 ```
 
 Let's go around the various configuration options you have here.
@@ -98,14 +98,27 @@ to `[::]:8777`, then the webhook URL will be `http://example.org/github`.
 
 ### Making a daemon
 
-Not documented yet. It's pretty easy with systemd units though, have a look at them!
+`gowebmake` doesn't become a daemon by itself, as programming this is utterly boring and became mostly useless these
+days. Instead, please use your system facilities to make that, like `systemd`. Examples below.
 
 
-## Example Makefile
+## Example
 
-Here's how I deploy my Hugo blog:
+In my setup, the blog's source code is on a public GitHub repo. On the server, everything happens under `/blog`:
 
 ```
+/blog
+/blog/config        # gowebmake configuration file
+/blog/webmake       # gowebmake working directory
+/blog/www           # public directory used by the web server (nginx)
+```
+
+### Makefile
+
+This `Makefile` should do for about any Hugo blog. It sits
+[at the root](https://github.com/Xowap/blog/blob/master/Makefile) of my repo.
+
+```Makefile
 build:
 	rm -fr dist
 	hugo -d dist
@@ -120,6 +133,67 @@ ifndef DEPLOY_DIR
 	$(error DEPLOY_DIR is undefined)
 endif
 ```
+
+This way I can manually deploy my blog to a directory by going to the root of it and typing
+`make deploy DEPLOY_DIR=/some/target/dir`. This is exactly what gowebmake does under the hood.
+
+### Configuration
+
+Here's my configuration file for `gowebmake`, that is located in `/blog/config`:
+
+```
+workdir = "/blog/webmake"
+gitbin = "/usr/bin/git"
+makebin = "/usr/bin/make"
+
+[github."Xowap/blog"]
+secret = "hahahaha"
+
+[github."Xowap/blog".branches.master]
+target = "deploy"
+
+[github."Xowap/blog".branches.master.env]
+DEPLOY_DIR = "/blog/www"
+```
+
+### Systemd service
+
+Supposing you installed the `gowebmake` binary into `/usr/bin/gowebmake` and that your distro uses `systemd`, you can
+simply put this in `/etc/systemd/system/gowebmake.service`:
+
+```
+[Unit]
+Description=Gowebmake server
+Requires=network.target
+
+[Service]
+User=www-data
+Group=www-data
+ExecStart=/usr/bin/gowebmake -c /blog/config
+Restart=always
+TimeoutStartSec=infinity
+
+[Install]
+WantedBy=multi-user.target
+```
+
+Then run the following commands
+
+```bash
+# This shall be done only once
+systemctl enable gowebmake.service
+
+# Do this anytime you want to start the sercice
+systemctl start gowebmake.service
+
+# Just check that it runs
+systemctl status gowebmake.service
+```
+
+### WebHook setup
+
+As explained before, you have to configure the webhook in GitHub. Once it is done, you are good to go, simply push
+to your repo and see the blog getting updated live!
 
 ## Contributors and licencing
 
