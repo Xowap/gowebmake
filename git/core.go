@@ -71,6 +71,12 @@ func Reset(config common.Config, target string, commit string) error {
         return errors.New("Could not reset")
     }
 
+    cmd = exec.Command(config.GitBin, "submodule", "sync", "--recursive")
+    cmd.Dir = target
+    if err := cmd.Run(); err != nil {
+        return errors.New("Error while syncing submodules")
+    }
+
     cmd = exec.Command(config.GitBin, "submodule", "update", "--init")
     cmd.Dir = target
     if err := cmd.Run(); err != nil {
